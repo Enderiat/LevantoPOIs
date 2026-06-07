@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Levanto Interactive Guide & Navigator</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        .popup-content {
+            max-width: 250px;
+            font-family: sans-serif;
+        }
+        .popup-content h3 {
+            margin: 0 0 5px 0;
+            color: #16a085;
+            font-size: 16px;
+        }
+        .popup-content p {
+            margin: 0 0 10px 0;
+            font-size: 13px;
+            color: #555;
+            line-height: 1.4;
+        }
+        .popup-img {
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .popup-audio {
+            width: 100%;
+            height: 30px;
+            margin-bottom: 10px;
+        }
+        /* Style for our new routing button */
+        .route-btn {
+            display: block;
+            width: 100%;
+            padding: 8px;
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+        }
+        .route-btn:hover {
+            background-color: #27ae60;
+        }
+        /* Hides the ugly text turn-by-turn instruction box over the map */
+        .leaflet-routing-container {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+    <script>
+        // Initialize Map centered on Levanto
+        const map = L.map('map').setView([44.1685, 9.6125], 16);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Global variables to track user position and the active routing line
+        let userLocation = null;
+        let userMarker = null;
+        let routingControl = null;
+
+        // 1. Locate the User Automatically
+        map.locate({setView: false, watch: true, enableHighAccuracy: true});
+
+        // When location is successfully found
+        map.on('locationfound', function(e) {
+            userLocation = e.latlng;
+
+            // If it's the first time finding them, create the marker
+            if (!userMarker) {
+                userMarker = L.circleMarker(userLocation, {
+                    radius: 8,
+                    fillColor: '#3388ff',
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(map).bindPopup("You are here");
+            } else {
+                // Otherwise update their moving position smoothly
+                userMarker.setLatLng(userLocation);
+            }
+        });
+
+        // Handle geolocation errors (e.g., if user denies permission)
+        map.on('locationerror', function() {
+            alert("Could not access your location. Route planning will default from the town center.");
+            userLocation = L.latLng(44.1685, 9.6125); // Default fallback coordinate
+        });
+
+        // 2. Define Your POIs
+        const pois = [
+            {
+                name: "Chiesa di Sant'Andrea",
+                lat: 44.1691,
+                lng: 9.6106,
+                description: "Built in 1222, this striking church is a prime example of Ligurian Gothic architecture, famous for its black-and-white striped marble facade.",
+                image: "images/sant_andrea.jpg",
+                audio: "audio/sant_andrea.mp3"
+            },
+            {
+                name: "Castello di San Giorgio",
+                lat: 44.1684,
+                lng: 9.6102,
+                description: "An imposing 12th-century medieval fortress rebuilt by the Republic of Genoa to defend the coast from pirate raids.",
+                image: "Images/castello.jpeg",
+                audio: "Audio/Castello.mp3"
+            },
+            {
+                name: "Loggia Medievale",
+                lat: 44.1678,
+                lng: 9.6119,
+                description: "A rare 13th-century commercial and archival structure featuring elegant Romanesque arches, recognized by UNESCO.",
+                image: "images/loggia.jpg",
+                audio: "audio/loggia.mp3"
+            },
+            {
+                name: "Le Grottesche (The Grotesques)",
+                lat: 44.1695,
+                lng: 9.6128,
+                description: "Whimsical 16th-century caricature frescoes painted onto the historical building facades along Via Garibaldi.",
+                image: "images/grottesche.jpg",
+                audio: "audio/grottesche.mp3"
+            },
+            {
+                name: "Pista Ciclopedonale Maremonti",
+                lat: 44.1668,
+                lng: 9.6085,
+                description: "A stunning coastal cycling and walking path built inside disused 19th-century railway tunnels, linking Levanto to nearby towns.",
+                image: "images/maremonti.jpg",
+                audio: "audio/maremonti.mp3"
+            }
+        ];
+
+
+        // 3. Loop through POIs and inject the route button logic
+        pois.forEach(poi => {
+            const marker = L.marker([poi.lat, poi.lng]).addTo(map);
+
+            let popupHTML = `<div class="popup-content">`;
+            popupHTML += `<h3>${poi.name}</h3>`;
+
+            if (poi.image) popupHTML += `<img src="${poi.image}" alt="${poi.name}" class="popup-img">`;
+            if (poi.description) popupHTML += `<p>${poi.description}</p>`;
+
+            if (poi.audio) {
+                popupHTML += `
+                    <audio controls class="popup-audio">
+                        <source src="${poi.audio}" type="audio/mpeg">
+                    </audio>
+                `;
+            }
+
+            // The "Get Directions" button calling our custom function below
+            popupHTML += `<button class="route-btn" onclick="calculateRoute(${poi.lat}, ${poi.lng})">Get Directions</button>`;
+            popupHTML += `</div>`;
+
+            marker.bindPopup(popupHTML);
+        });
+
+        // 4. Function to draw the path on the map
+        function calculateRoute(destLat, destLng) {
+            // Remove any existing route lines from a previous click
+            if (routingControl) {
+                map.removeControl(routingControl);
+            }
+
+            if (!userLocation) {
+                userLocation = L.latLng(44.1685, 9.6125); // Fallback if GPS hasn't locked yet
+            }
+
+            // Create and display the new path line
+            routingControl = L.Routing.control({
+                waypoints: [
+                    L.latLng(userLocation.lat, userLocation.lng), // Start at User
+                    L.latLng(destLat, destLng)                    // End at Landmark
+                ],
+                router: L.Routing.osrmv1({
+                    profile: 'foot' // Forces walking directions through Levanto's alleys instead of driving paths
+                }),
+                lineOptions: {
+                    styles: [{ color: '#2ecc71', opacity: 0.8, weight: 6 }] // Green route line
+                },
+                createMarker: function() { return null; } // Prevents the plugin from overriding our custom markers
+            }).addTo(map);
+
+            map.closePopup(); // Closes the popup window so the user can clearly see the drawn path
+        }
+    </script>
+</body>
+</html>
